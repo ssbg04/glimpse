@@ -1,1 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StrangerTalk - Connect Freely</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        /* Custom Tweaks */
+        body { font-family: 'Inter', sans-serif; background-color: #0f172a; color: white; }
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+        /* Video Mirroring */
+        .mirror { transform: scaleX(-1); }
+        /* Range Slider Style */
+        input[type=range] { accent-color: #3b82f6; }
+        /* Prevent text selection while dragging */
+.noselect {
+    user-select: none;
+    -webkit-user-select: none;
+}
+/* Style for the resize handle area */
+#resizeHandle {
+    /* Triangle shape using clip-path or just a square */
+    clip-path: polygon(100% 0, 100% 100%, 0 100%);
+}
+    </style>
+</head>
+<body class="h-screen w-screen overflow-hidden flex flex-col">
 
+    <div id="landing-page" class="flex-1 flex flex-col items-center justify-center p-6 relative bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
+        
+        <h1 class="text-5xl md:text-7xl font-bold tracking-tighter mb-4 text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-600">
+            StrangerTalk
+        </h1>
+        <p class="text-slate-400 text-lg mb-8 max-w-md text-center">
+            Talk to strangers, make friends, or just pass the time. Choose your mode below.
+        </p>
+
+        <div class="w-full max-w-md mb-6">
+            <label class="text-xs uppercase font-bold text-slate-500 ml-1">Interests (Optional)</label>
+            <input id="interestInput" type="text" placeholder="e.g. Anime, Coding, Music" 
+                class="w-full mt-1 px-4 py-3 rounded-xl bg-slate-800 border border-slate-700 focus:border-blue-500 outline-none transition text-white">
+        </div>
+
+        <div class="flex gap-4 mb-12">
+            <button onclick="startChat('text')" class="px-8 py-4 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 transition flex items-center gap-2 font-bold shadow-lg">
+                <span class="material-icons text-blue-400">chat</span> Text Only
+            </button>
+            <button onclick="startChat('video')" class="px-8 py-4 rounded-xl bg-blue-600 hover:bg-blue-500 transition flex items-center gap-2 font-bold shadow-lg shadow-blue-900/50">
+                <span class="material-icons text-white">videocam</span> Video Chat
+            </button>
+        </div>
+
+        <div class="absolute top-6 right-6 flex items-center gap-2 bg-slate-800 px-3 py-1 rounded-full text-xs">
+            <div class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+            <span id="online-count-landing">0</span> Online
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 text-center max-w-4xl text-slate-400 text-sm mt-8">
+            <div class="p-4 bg-slate-800/50 rounded-lg">
+                <h3 class="font-bold text-white mb-2">Is it free?</h3>
+                <p>Yes, StrangerTalk is completely free to use instantly.</p>
+            </div>
+            <div class="p-4 bg-slate-800/50 rounded-lg">
+                <h3 class="font-bold text-white mb-2">Is it safe?</h3>
+                <p>We use moderation tools, but always be careful sharing info.</p>
+            </div>
+            <div class="p-4 bg-slate-800/50 rounded-lg">
+                <h3 class="font-bold text-white mb-2">Do I need an account?</h3>
+                <p>No registration required. Just click start.</p>
+            </div>
+        </div>
+
+        <footer class="absolute bottom-4 text-xs text-slate-600 flex gap-4">
+            <span>© 2026 StrangerTalk</span>
+            <a href="#" class="hover:text-slate-400">Blog</a>
+            <a href="#" class="hover:text-slate-400">Rules</a>
+            <a href="#" class="hover:text-slate-400">Privacy</a>
+        </footer>
+    </div>
+
+    <div id="main-app" class="hidden h-full flex flex-col md:flex-row">
+        
+        <div id="video-container" class="hidden md:flex-1 relative bg-black flex flex-col h-[50vh] md:h-auto border-b md:border-b-0 md:border-r border-slate-800">
+            
+            <div class="relative flex-1 w-full h-full overflow-hidden group">
+                <video id="remoteVideo" autoplay playsinline class="w-full h-full object-cover"></video>
+                <div class="absolute inset-0 flex items-center justify-center text-slate-500" id="remote-placeholder">
+                    <span class="animate-pulse">Waiting for partner...</span>
+                </div>
+                
+                <div class="absolute top-4 left-4 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition duration-300">
+                    <button class="bg-red-600/80 hover:bg-red-600 text-white p-2 rounded-full text-xs flex items-center gap-1 backdrop-blur-sm">
+                        <span class="material-icons text-sm">flag</span> Report
+                    </button>
+                    <div class="bg-black/60 p-2 rounded-full flex items-center gap-2 backdrop-blur-sm">
+                        <span class="material-icons text-sm">volume_up</span>
+                        <input type="range" min="0" max="1" step="0.1" class="w-20 h-1" oninput="document.getElementById('remoteVideo').volume = this.value">
+                    </div>
+                </div>
+            </div>
+
+            <div id="localVideoWrapper" class="absolute bottom-4 right-4 w-48 h-36 bg-slate-900 rounded-lg shadow-2xl z-30 group cursor-move overflow-hidden border-2 border-slate-700 min-w-[100px] min-h-[75px]">
+    
+    <video id="localVideo" autoplay muted playsinline class="w-full h-full object-cover pointer-events-none mirror"></video>
+    
+    <div class="absolute inset-0 bg-black/60 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition duration-200 gap-2 p-2 pointer-events-auto">
+        <button id="flipBtn" onclick="toggleMirror()" class="text-xs bg-slate-700 px-2 py-1 rounded text-white flex items-center gap-1 hover:bg-slate-600 w-full justify-center">
+            <span class="material-icons text-xs">flip</span> Flip
+        </button>
+        
+        <select id="camSelect" class="w-full text-[10px] bg-slate-800 text-white border-none rounded p-1 outline-none">
+            <option>Default Camera</option>
+        </select>
+        <select id="micSelect" class="w-full text-[10px] bg-slate-800 text-white border-none rounded p-1 outline-none">
+            <option>Default Mic</option>
+        </select>
+    </div>
+
+    <div id="resizeHandle" class="absolute bottom-0 right-0 w-4 h-4 bg-blue-500 cursor-nwse-resize z-40 rounded-tl opacity-0 group-hover:opacity-100 transition"></div>
+</div>
+        </div>
+
+        <div id="chat-container" class="flex-1 md:w-[400px] md:max-w-[400px] flex flex-col bg-white dark:bg-slate-900 relative">
+            
+            <div class="h-16 border-b border-slate-800 flex items-center justify-between px-4 bg-slate-900 z-10">
+                <div class="flex items-center gap-2">
+                    <button onclick="goHome()" class="font-bold text-xl tracking-tighter hover:text-blue-400 transition">StrangerTalk</button>
+                    <span class="text-xs bg-slate-800 px-2 py-0.5 rounded text-slate-400" id="chat-online-count">0 online</span>
+                </div>
+                <button onclick="reportUser()" class="text-slate-400 hover:text-red-500 transition text-sm flex items-center gap-1">
+                    <span class="material-icons text-sm">flag</span> Report
+                </button>
+            </div>
+
+            <div id="messages" class="flex-1 overflow-y-auto p-4 space-y-3 bg-slate-900">
+                <div class="bg-blue-900/20 border border-blue-900/50 p-3 rounded-lg text-xs text-blue-200 mb-4">
+                    <strong>Note:</strong> Be polite. Keep it clean. Violators will be banned.
+                </div>
+                <div class="text-center text-slate-600 text-sm italic" id="status-msg">
+                    Click "Start" to find a stranger.
+                </div>
+            </div>
+
+            <div class="p-4 bg-slate-900 border-t border-slate-800">
+                <div class="flex gap-2">
+                    <button id="actionBtn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg shadow-lg transition flex items-center gap-2 min-w-[100px] justify-center" onclick="handleAction()">
+                        NEW
+                    </button>
+                    
+                    <input id="msgInput" type="text" placeholder="Type a message..." disabled
+                        class="flex-1 bg-slate-800 text-white px-4 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 transition disabled:opacity-50">
+                    
+                    <button id="sendBtn" class="bg-slate-700 hover:bg-blue-600 text-white p-3 rounded-lg transition disabled:opacity-50" disabled onclick="sendMessage()">
+                        <span class="material-icons">send</span>
+                    </button>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <script src="client.js"></script>
+</body>
+  </html>
